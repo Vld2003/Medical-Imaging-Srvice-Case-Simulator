@@ -1,2 +1,2 @@
-# Medical-Imaging-Srvice-Case-Simulator
-Educational Python application for medical image QA and service case simulation.
+# Medical Imaging Service Case Simulator
+Educational Python application for Medical Imaging QA and service case simulation.
