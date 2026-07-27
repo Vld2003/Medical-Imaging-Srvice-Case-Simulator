@@ -1,96 +1,69 @@
 from __future__ import annotations
-
 from typing import Dict, Tuple
-
 import cv2
 import numpy as np
 
-
 def normalize_float(img: np.ndarray) -> np.ndarray:
-    """Convert image to float32 in [0, 255]."""
+    #Convert image to float32 in [0, 255]
     arr = img.astype(np.float32)
     arr = np.nan_to_num(arr)
     if arr.ndim == 3:
         arr = cv2.cvtColor(arr.astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
     return arr
 
-
 def estimate_noise(img: np.ndarray) -> float:
-    """
-    Estimate high-frequency noise as the standard deviation of the residual:
-    image - GaussianBlur(image).
-    """
+    #Estimate high-frequency noise as the standard deviation of the residual:image - GaussianBlur(image).
     arr = normalize_float(img)
     blurred = cv2.GaussianBlur(arr, (5, 5), 0)
     residual = arr - blurred
     return float(np.std(residual))
 
-
 def laplacian_sharpness(img: np.ndarray) -> float:
-    """Sharpness estimate using variance of the Laplacian."""
+   #Sharpness estimate using variance of the Laplacian
     arr = normalize_float(img)
     return float(cv2.Laplacian(arr, cv2.CV_64F).var())
 
-
 def integral_uniformity(img: np.ndarray) -> float:
-    """
-    Approximate integral uniformity on the central 80% crop:
-    100 * (1 - (max - min) / (max + min))
-    Higher is better.
-    """
+   #Approximate integral uniformity on the central 80% crop
     arr = normalize_float(img)
     h, w = arr.shape[:2]
-
     y1, y2 = int(0.1 * h), int(0.9 * h)
     x1, x2 = int(0.1 * w), int(0.9 * w)
     crop = arr[y1:y2, x1:x2]
-
     c_min = float(np.percentile(crop, 1))
     c_max = float(np.percentile(crop, 99))
     denom = c_max + c_min
-
     if denom <= 1e-8:
         return 0.0
-
     value = 100.0 * (1.0 - ((c_max - c_min) / denom))
     return float(np.clip(value, 0, 100))
 
-
 def approximate_cnr(img: np.ndarray) -> float:
-    """
-    Approximate CNR without manual ROI selection.
-    Uses Otsu threshold to split image into two regions.
-    """
+   #Approximate CNR without manual ROI selection.
+   #Uses Otsu threshold to split image into two regions.
     arr = normalize_float(img).astype(np.uint8)
-
     try:
         _, mask = cv2.threshold(arr, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         region_a = arr[mask > 0].astype(np.float32)
         region_b = arr[mask == 0].astype(np.float32)
-
         if len(region_a) < 20 or len(region_b) < 20:
             return 0.0
-
         mean_diff = abs(float(region_a.mean()) - float(region_b.mean()))
         pooled_std = float(np.sqrt((region_a.var() + region_b.var()) / 2.0))
 
         if pooled_std < 1e-8:
             return 0.0
-
         return mean_diff / pooled_std
     except Exception:
         return 0.0
 
-
 def calculate_metrics(img: np.ndarray) -> Dict[str, float]:
-    """Calculate simple global QA-style metrics."""
+   #Calculate simple global QA-style metrics.
     arr = normalize_float(img)
-
     mean_val = float(np.mean(arr))
     std_val = float(np.std(arr))
     p5 = float(np.percentile(arr, 5))
     p95 = float(np.percentile(arr, 95))
-
     contrast = p95 - p5
     noise = estimate_noise(arr)
     sharpness = laplacian_sharpness(arr)
@@ -99,26 +72,13 @@ def calculate_metrics(img: np.ndarray) -> Dict[str, float]:
 
     snr = mean_val / std_val if std_val > 1e-8 else 0.0
 
-    return {
-        "Mean intensity": mean_val,
-        "Standard deviation": std_val,
-        "Percentile contrast P95-P5": contrast,
-        "Estimated noise": noise,
-        "SNR approximation": snr,
-        "CNR approximation": cnr,
-        "Uniformity approximation (%)": uniformity,
-        "Sharpness / Laplacian variance": sharpness,
-    }
-
+    return {"Mean intensity": mean_val, "Standard deviation": std_val, "Percentile contrast P95-P5": contrast, "Estimated noise": noise, "SNR approximation": snr, "CNR approximation": cnr, "Uniformity approximation (%)": uniformity,"Sharpness / Laplacian variance": sharpness,}
 
 def interpret_metrics(metrics: Dict[str, float]) -> Tuple[str, list[str], list[str]]:
-    """
-    Generate a QA-style interpretation.
-    Thresholds are heuristic and educational, not clinical.
-    """
+    #Generate a QA-style interpretation.
+    #Thresholds are heuristic and educational, not clinical.
     observations: list[str] = []
     recommendations: list[str] = []
-
     contrast = metrics["Percentile contrast P95-P5"]
     noise = metrics["Estimated noise"]
     sharpness = metrics["Sharpness / Laplacian variance"]
