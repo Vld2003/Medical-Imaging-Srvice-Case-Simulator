@@ -18,9 +18,11 @@ def estimate_noise(img: np.ndarray) -> float:
     residual = arr - blurred
     return float(np.std(residual))
 
-def laplacian_sharpness(img: np.ndarray) -> float:
-   #Sharpness estimate using variance of the Laplacian
-    arr = normalize_float(img)
+def laplacian_sharpness(arr):
+    print("dtype:", arr.dtype)
+    if arr.dtype!=np.uint8:
+        arr=cv2.normalize(arr, None, 0, 255, cv2.NORM_MINMAX)
+        arr=arr.astype(np.uint8)
     return float(cv2.Laplacian(arr, cv2.CV_64F).var())
 
 def integral_uniformity(img: np.ndarray) -> float:
